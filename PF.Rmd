@@ -1,0 +1,141 @@
+---
+title: "PF"
+author: "Wilhelm Roee"
+date: "April 10, 2017"
+output: 
+  html_document:
+    toc: yes
+    toc_float: true
+---
+
+##Data Cleaning 
+
+```{r}
+speed <- read.csv("Speed Dating Data.csv")
+speed$condtn <- as.factor(speed$condtn)
+speed$gender <- as.factor(speed$gender)
+speed$match <- as.factor(speed$match)
+speed$field_cd <- as.factor(speed$field_cd)
+levels(speed$field_cd) <- c("Law","Math","SocScie/Psych", "MedSci", "Engineering", "English", "History", "Business", "Education", "Bio","SocialWork","Undergrad", "PoliSci", "Film","FineArts","Lang","Architecture","Other")
+speed$race <- as.factor(speed$race)
+speed$goal <- as.factor(speed$goal)
+levels(speed$goal) <- c("FunNightOut", "MeetNewPpl", "GetADate","SRSRelationship", "ToSayIDidIt","Other")
+speed$date <- as.factor(speed$date)
+levels(speed$date) <- c("SVRL/Week","2/Week","1/Week","2/Month", "1/Month", "SVRL/Year", "AlmostNever")
+speed$go_out <- as.factor(speed$go_out)
+levels(speed$go_out) <- c("SVRL/Week","2/Week","1/Week","2/Month", "1/Month", "SVRL/Year", "AlmostNever")
+speed$career_c <-as.factor(speed$career_c)
+levels(speed$career_c) <- c("Lawyer","Academic/Research","Psychologist","DocMed", "Engineer", "Entertainment", "Banking/Consulting", "RealEstate","IntlAffairs","Undecided","SocialWork","SpeechPath","Politics", "ProSports", "Other", "Journalism", "Architecture")
+speed$race_o <-as.factor(speed$race_o) 
+speed$dec_o <- as.factor(speed$dec_o)
+speed$samerace <- as.factor(speed$samerace)
+
+sd2 <- speed
+sd2 <- sd2[ , -1] #IID  
+sd2 <- sd2[, -1] #ID  
+sd2 <- sd2[, -2] #IDG
+sd2 <- sd2[, -3] #Wave
+sd2 <- sd2[, -3] #Round
+sd2 <- sd2[, -3] #Position
+sd2 <- sd2[, -3] #Postion1
+sd2 <- sd2[, -4] #Partner 
+sd2 <- sd2[, -4] #PID
+sd2 <- sd2[, -26]#Field
+sd2 <- sd2[, -(27:29)]#Academics
+sd2 <- sd2[,-(30:32)]#Socioeconomic 
+sd2 <- sd2[,-33]#Career
+sd2 <- sd2[,-(59:64)]#What others look for
+sd2 <- sd2[,-(70:74)]#Others perception
+sd2 <- sd2[,-(81:92)]#Data gathered after intitial
+sd2 <- sd2[,(1:79)]
+sd2 <- sd2[,-(70:79)] #Removes Post First Date
+sd2 <- sd2[,-52]#exclude expnum
+
+sdrandom <- sd2[sample(nrow(sd2), nrow(sd2)),] #Get a random sample since the data is organized by participant
+
+# Check for NA's in the dataset by vaiable
+sapply(sd2, function(y) sum(length(which(is.na(y)))))
+
+# Choosing to delete rows with NA according to suggested cleaning  
+sdclean <- na.omit(sdrandom) #Remove rows with NA values to create a "clean" set
+```
+
+
+## Data Exploration 
+```{r}
+table(sdclean$match)
+round(prop.table(table(sdclean$match)) * 100, 1)
+
+#Logistic regression with significance level
+summary(glm(match~ . , data = sdclean, family = "binomial"))
+#sdn = cbind(sdclean$match,sdclean$gender,sdclean$int_corr,sdclean$age_o,sdclean$race_o,sdclean$pf_o_sin,sdclean$pf_o_sha,sdclean$attr_o,sdclean$)
+sdn <- sdclean[,c(4,1,5,7,8,10,14,16,19,20,23,24,26,27,30,32,33,36,39,41,42,44,45,46,47,48,49,50,51,58,59,60,61,62,63)]
+
+
+#Randomize the complete dataset
+randomized_data <- sdn[sample(nrow(sdn)),]
+
+#As a result of the skewness in the data, I here create one subset where the number of no responses has been reduced to the double of yes responses
+responseyes <- randomized_data[randomized_data$match == 1,]
+responseno <- randomized_data[randomized_data$match == 0,]
+responseno <- responseno[1:(dim(responseyes)[1]*2),]
+adj <- rbind(responseyes,responseno)
+adj <- adj[sample(nrow(adj)),] # ramdomize
+round(prop.table(table(adj$match)) * 100, 1)
+
+#Normalizing function
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+#Normalizing Column by column 
+adj$int_corr = normalize(adj$int_corr)
+adj$age_o = normalize(adj$age_o)
+adj$pf_o_sin = normalize(adj$pf_o_sin)
+adj$pf_o_sha = normalize(adj$pf_o_sha)
+adj$attr_o = normalize(adj$attr_o)
+adj$fun_o = normalize(adj$fun_o)
+adj$amb_o = normalize(adj$amb_o)
+adj$prob_o = normalize(adj$prob_o)
+adj$met_o = normalize(adj$met_o)
+adj$exercise = normalize(adj$exercise)
+adj$art = normalize(adj$art)
+adj$gaming = normalize(adj$gaming)
+adj$clubbing = normalize(adj$clubbing)
+adj$tv = normalize(adj$tv)
+adj$theater = normalize(adj$theater)
+adj$movies = normalize(adj$movies)
+adj$concerts = normalize(adj$concerts)
+adj$music = normalize(adj$music)
+adj$shopping = normalize(adj$shopping)
+adj$yoga = normalize(adj$yoga)
+adj$exphappy = normalize(adj$exphappy)
+adj$attr2_1 = normalize(adj$attr2_1)
+adj$sinc2_1 = normalize(adj$sinc2_1)
+adj$intel2_1 = normalize(adj$intel2_1)
+adj$fun2_1 = normalize(adj$fun2_1)
+adj$amb2_1 = normalize(adj$amb2_1)
+adj$shar2_1 = normalize(adj$shar2_1)
+
+
+#Dividing each factor level into a dummy variable
+adj_d <- as.data.frame(model.matrix(~ . -1, data = adj))
+
+```
+
+
+
+## Match Prediction to better cater to custemors  
+```{r}
+
+Res
+```
+
+
+###KNN
+###Neural
+###SVM
+###Tree
+###Forest
+
+
