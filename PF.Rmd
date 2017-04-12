@@ -53,7 +53,7 @@ sd2 <- sd2[,-52]#exclude expnum
 
 sdrandom <- sd2[sample(nrow(sd2), nrow(sd2)),] #Get a random sample since the data is organized by participant
 
-# Check for NA's in the dataset by vaiable
+# Check for NA's in the dataset by variable
 sapply(sd2, function(y) sum(length(which(is.na(y)))))
 
 # Choosing to delete rows with NA according to suggested cleaning  
@@ -120,22 +120,193 @@ adj$shar2_1 = normalize(adj$shar2_1)
 
 #Dividing each factor level into a dummy variable
 adj_d <- as.data.frame(model.matrix(~ . -1, data = adj))
+adj_d = adj_d[,-1]
 
 ```
 
 
 
 ## Match Prediction to better cater to custemors  
-```{r}
 
-Res
+##Prediction Models
+###  kNN (K Nearest Neighbors)
+To optimize the result of this model, a number of different values for k has been used. It seems like k=10 produces the highest number of correct predictions. 
+
+```{r}
+#Structure according to the model with the response variable separated as well as a test (20%) and training (80%) data set
+train <- adj_d[(1:round(0.8*dim(adj_d)[1])), -22]
+test <- adj_d[(round(0.8*dim(adj_d)[1])+1):round(dim(adj_d)[1]), -22]
+train_labels <- adj_d$match1[1:round(0.8*dim(adj_d)[1])]
+test_labels <- adj_d$match1[(round(0.8*dim(adj_d)[1])+1):round(dim(adj_d)[1])]
+
+library(class)
+library(gmodels)
+
+#KNN predictions 
+test_pred <- knn(train = train, test = test, cl = train_labels, k=10)
+
+#Results
+CrossTable(x = test_labels, y = test_pred, prop.chisq=FALSE)
+correct.prediction.procentage <- test_pred == test_labels
+prop.table(table(correct.prediction.procentage))*100
+
+```
+
+### ANN (Artifical Neural Networks) 
+
+To improve the neural network model, the number of hidden nodes has been increased to 2. A larger increase leads to a large increase in computation time, and therfore this has not been tried.
+```{r}
+library(neuralnet)
+
+# Selecting the same train/test variables as before, only with the response variable in the table
+train <- adj_d[(1:round(0.8*dim(adj_d)[1])), ]
+test <- adj_d[(round(0.8*dim(adj_d)[1])+1):round(dim(adj_d)[1]), ]
+
+
+# Naural Network Model 
+nn_model <- neuralnet(formula = match1~ gender1+        int_corr+                  
+age_o+                      race_o2+                    race_o3+                   
+race_o4+                    race_o6+                    pf_o_sin+                  
+pf_o_sha+                   attr_o+                     fun_o+                     
+amb_o+                      prob_o+                     met_o+                     
+field_cdMath+               `field_cdSocScie/Psych`+      field_cdMedSci+            
+field_cdEngineering+        field_cdEnglish+            field_cdHistory+           
+field_cdBusiness+           field_cdEducation+          field_cdBio+               
+field_cdSocialWork+         field_cdUndergrad+          field_cdPoliSci+           
+field_cdFilm+               field_cdFineArts+           field_cdLang+              
+field_cdArchitecture+       race4+                  race6+                     
+goalMeetNewPpl+             goalGetADate+               goalSRSRelationship+       
+goalToSayIDidIt+            goalOther+                  `go_out2/Week`+              
+`go_out1/Week`+               `go_out2/Month`+              `go_out1/Month`+             
+`go_outSVRL/Year`+            go_outAlmostNever+          `career_cAcademic/Research`+ 
+career_cPsychologist+       career_cDocMed+             career_cEngineer+          
+career_cEntertainment+      `career_cBanking/Consulting`+ career_cRealEstate+        
+career_cIntlAffairs+        field_cdOther+             race2+                     
+race3+                  career_cUndecided+          career_cSocialWork+        
+career_cSpeechPath+         career_cPolitics+           career_cProSports+         
+career_cOther+              career_cJournalism+         career_cArchitecture+      
+exercise+                   art+                        gaming+                    
+ clubbing+                   tv+                         theater+                   
+ movies+                     concerts+                   music+                     
+ shopping+                   yoga+                       exphappy+                  
+ attr2_1+                    sinc2_1+                    intel2_1+                  
+ fun2_1+                     amb2_1+                     shar2_1       , 
+                      data = train, hidden = 1)
+
+
+# Visualize the network topology
+plot(nn_model)
+
+# Predict the test sample response
+model_results <- compute(nn_model, test[2:81])
+predicted <- round(model_results$net.result)
+
+# Results 
+CrossTable(x = test$match1, y = predicted, prop.chisq=FALSE)
+correct.prediction.procentage <- predicted == test$match1
+prop.table(table(correct.prediction.procentage))*100
+
+```
+
+###SVM (Support Vector Machines) 
+####Linear 
+
+```{r}
+library(kernlab)
+# Linear SVM Model 
+classifier <- ksvm(match1 ~ ., data = train, kernel = "vanilladot")
+
+# Predictions on test dataset
+predictions <- predict(classifier, test)
+# The model can produce results like 1.5 which would be rounded to 2(which isnt a response). Therfore, I use a min function so that 1 is the maximum response.
+predictions[predictions>1] = 1 
+predictions[predictions<0] = 0
+
+# Results
+CrossTable(x = test$match1, y = round(predictions), prop.chisq=FALSE) # the model can produce results like 1.5 which would be rounded to 2(which isnt a response). Therfore, I use a min function so that 1 is the maximum response. 
+correct.prediction.procentage <- round(predictions) == test$match1
+prop.table(table(correct.prediction.procentage))*100
+
+```
+
+####Non Linear
+
+The non-linear model is a way of improving the model, as it would be reasonable with non-linear relationships. 
+```{r}
+# Non Linear SVM Model and predictions
+classifier_rbf <- ksvm(match1 ~ ., data = train, kernel = "rbfdot")
+predictions_rbf <- predict(classifier_rbf, test)
+
+# Adjust predictions
+predictions_rbf[predictions_rbf>1] = 1 
+predictions_rbf[predictions_rbf<0] = 0
+
+# Results 
+CrossTable(x = test$match1, y = round(predictions_rbf), prop.chisq=FALSE)
+correct.prediction.procentage <- round(predictions_rbf) == test$match1
+prop.table(table(correct.prediction.procentage))*100
+```
+### Tree
+ 
+```{r}
+## Step 3: Training a model on the data ----
+# build the simplest decision tree
+train$match1 <- as.factor(train$match1)
+test$match1 <- as.factor(test$match1)
+library(C50)
+tree_model <- C5.0(train[-1], train$match1)
+
+# display simple facts about the tree
+tree_model
+
+# display detailed information about the tree
+summary(tree_model)
+
+## Step 4: Evaluating model performance ----
+# create a factor vector of predictions on test data
+tree_pred <- predict(tree_model, test)
+
+# cross tabulation of predicted versus actual classes
+library(gmodels)
+CrossTable(test$match1, tree_pred,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual match', 'predicted match'))
+# Results 
+correct.prediction.procentage <- tree_pred == test$match1
+prop.table(table(correct.prediction.procentage))*100
+
+## Step 5: Improving model performance ----
+
+## Boosting the accuracy of decision trees
+# boosted decision tree with 10 trials
+boost10 <- C5.0(train[-1], train$match1,
+                       trials = 10)
+boost10
+summary(boost10)
+
+boost_pred10 <- predict(boost10, test)
+CrossTable(test$match1, boost_pred10,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual match', 'predicted match'))
+correct.prediction.procentage <- boost_pred10 == test$match1
+prop.table(table(correct.prediction.procentage))*100
+
+
+# boosted decision tree with 100 trials (not shown in text)
+boost100 <- C5.0(train[-1], train$match1,
+                        trials = 100)
+boost_pred100 <- predict(boost100, test)
+CrossTable(test$match1, boost_pred100,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual match', 'predicted match'))
+correct.prediction.procentage <- boost_pred100 == test$match1
+prop.table(table(correct.prediction.procentage))*100
+
 ```
 
 
-###KNN
-###Neural
-###SVM
-###Tree
-###Forest
+
+
+## Conclusion
 
 
